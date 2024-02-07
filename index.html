@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Work Hours Tracker</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        th,
+        td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: center;
+        }
+
+        th {
+            background-color: #f2f2f2;
+        }
+
+        button {
+            margin: 10px;
+            padding: 8px;
+            font-size: 14px;
+            cursor: pointer;
+        }
+
+        #jobForm {
+            display: none;
+            margin-top: 20px;
+        }
+
+        #jobTable {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+
+        #jobTable th,
+        #jobTable td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: center;
+        }
+
+        textarea {
+            width: 100%;
+            height: 100px;
+            resize: vertical;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>Work Hours Tracker</h1>
+    <div>
+        <button onclick="prevMonth()">Prošli mjesec</button>
+        <button onclick="nextMonth()">Sljedeći mjesec</button>
+    </div>
+    <table id="calendarTable">
+        <thead>
+            <tr>
+                <th>Nedjelja</th>
+                <th>Ponedjeljak</th>
+                <th>Utorak</th>
+                <th>Srijeda</th>
+                <th>Četvrtak</th>
+                <th>Petak</th>
+                <th>Subota</th>
+            </tr>
+        </thead>
+        <tbody id="calendarBody"></tbody>
+    </table>
+
+    <div id="jobForm">
+        <h2>Enter Job Details</h2>
+        <label for="startTime">Start Time (HH:mm):</label>
+        <input type="text" id="startTime" pattern="([01]?[0-9]|2[0-3]):[0-5][0-9]" required>
+
+        <label for="endTime">End Time (HH:mm):</label>
+        <input type="text" id="endTime" pattern="([01]?[0-9]|2[0-3]):[0-5][0-9]" required>
+
+        <label for="location">Location:</label>
+        <input type="text" id="location" required>
+
+        <!-- New textarea for user notes -->
+        <label for="userNotes">User Notes:</label>
+        <textarea id="userNotes"></textarea>
+
+        <button onclick="addJob()">Add Job</button>
+    </div>
+
+    <table id="jobTable">
+        <thead>
+            <tr>
+                <th>Datum</th>
+                <th>Početak</th>
+                <th>Završetak</th>
+                <th>Ukupno</th>
+                <th>Lokacija</th>
+                <th>Napomena</th>
+                <th>Uređivanje</th>
+            </tr>
+        </thead>
+        <tbody id="jobTableBody"></tbody>
+        <!-- New row for total hours -->
+        <tfoot>
+            <tr>
+                <td colspan="3"></td>
+                <td id="totalHoursCell">Ukupno sati: 0.00</td>
+                <td colspan="2"></td>
+                <td></td>
+            </tr>
+        </tfoot>
+    </table>
+
+    <!-- Export to Excel button and scripts -->
+    <button onclick="exportToExcel()">Izvoz u Excel</button>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.5/xlsx.full.min.js"></script>
+    <script>
+        function exportToExcel() {
+            const jobTableBody = document.getElementById("jobTableBody");
+            const totalHoursCell = document.getElementById("totalHoursCell");
+
+            const workbook = XLSX.utils.book_new();
+
+            // Create a copy of the table without the "Action" column
+            const filteredTableBody = jobTableBody.cloneNode(true);
+            for (let i = 0; i < filteredTableBody.rows.length; i++) {
+                filteredTableBody.rows[i].deleteCell(-1); // Remove the last cell ("Action" column)
+            }
+
+            const worksheet = XLSX.utils.table_to_sheet(filteredTableBody);
+
+            // Set column widths (adjust as needed)
+            const columnWidths = [
+                { wch: 15 },  // Date
+                { wch: 15 },  // Start Time
+                { wch: 15 },  // End Time
+                { wch: 15 },  // Total Hours
+                { wch: 20 },  // Location
+                { wch: 40 },  // User Notes
+                { wch: 15 }   // Action
+            ];
+
+            worksheet['!cols'] = columnWidths;
+
+            // Get the column names from the table header
+            const columnNamesRow = document.getElementById("jobTable").querySelector("thead").querySelector("tr");
+            const columnNames = Array.from(columnNamesRow.children).map(cell => cell.textContent);
+
+            // Remove the "Action" column from columnNames
+            const filteredColumnNames = columnNames.filter(name => name !== "Uređivanje");
+
+            // Add the column names row to the worksheet at the beginning
+            const data = [filteredColumnNames];
+            XLSX.utils.sheet_add_aoa(worksheet, data, { origin: "A1" });
+
+            // Add the total hours row to the worksheet
+            const totalHoursRow = [null, null, null, totalHoursCell.textContent, null, null];
+            XLSX.utils.sheet_add_aoa(worksheet, [totalHoursRow], { origin: -1 });
+
+            XLSX.utils.book_append_sheet(workbook, worksheet, "Job Data");
+
+            // Save the workbook
+            XLSX.writeFile(workbook, "JobData.xlsx");
+        }
+    </script>
+
+    <script>
+        let currentMonth = new Date().getMonth();
+        let currentYear = new Date().getFullYear();
+        let selectedDate = null;
+
+        // Load saved data from localStorage
+        loadSavedData();
+        // Load job data for the initial month
+        loadJobData();
+
+        function renderCalendar() {
+            const calendarTable = document.getElementById("calendarTable");
+            const calendarBody = document.getElementById("calendarBody");
+
+            // Clear previous content
+            calendarBody.innerHTML = "";
+
+            // Get the first day of the month
+            const firstDay = new Date(currentYear, currentMonth, 1);
+            const startingDay = firstDay.getDay();
+
+            // Get the last day of the month
+            const lastDay = new Date(currentYear, currentMonth + 1, 0).getDate();
+
+            // Create cells for the days
+            let dayCount = 1;
+            for (let i = 0; i < 6; i++) {
+                const row = document.createElement("tr");
+
+                for (let j = 0; j < 7; j++) {
+                    const cell = document.createElement("td");
+
+                    if ((i === 0 && j < startingDay) || dayCount > lastDay) {
+                        cell.textContent = "";
+                    } else {
+                        cell.textContent = dayCount;
+                        cell.addEventListener("click", function () {
+                            selectedDate = new Date(currentYear, currentMonth, parseInt(cell.textContent));
+                            showJobForm();
+                        });
+                        dayCount++;
+                    }
+
+                    row.appendChild(cell);
+                }
+
+                calendarBody.appendChild(row);
+            }
+
+            // Update the header with the current month and year
+            const monthYearHeader = calendarTable.querySelector("th");
+            monthYearHeader.textContent = `${getMonthName(currentMonth)} ${currentYear}`;
+        }
+
+        function showJobForm() {
+            const jobForm = document.getElementById("jobForm");
+            jobForm.style.display = "block";
+        }
+
+        function hideJobForm() {
+            const jobForm = document.getElementById("jobForm");
+            jobForm.style.display = "none";
+            clearJobForm();
+        }
+
+        function clearJobForm() {
+            document.getElementById("startTime").value = "";
+            document.getElementById("endTime").value = "";
+            document.getElementById("location").value = "";
+            document.getElementById("userNotes").value = ""; // Clear user notes
+        }
+
+        function addJob() {
+            const startTime = document.getElementById("startTime").value;
+            const endTime = document.getElementById("endTime").value;
+            const location = document.getElementById("location").value;
+            const userNotes = document.getElementById("userNotes").value;
+
+            if (selectedDate) {
+                const totalHours = calculateTotalHours(startTime, endTime);
+
+                const jobTableBody = document.getElementById("jobTableBody");
+                const newRow = jobTableBody.insertRow();
+                newRow.insertCell().textContent = formatDate(selectedDate);
+                newRow.insertCell().textContent = startTime;
+                newRow.insertCell().textContent = endTime;
+                newRow.insertCell().textContent = totalHours.toFixed(2);
+                newRow.insertCell().textContent = location;
+                newRow.insertCell().textContent = userNotes; // Display user notes
+
+                // Add delete button
+                const deleteButtonCell = newRow.insertCell();
+                const deleteButton = document.createElement("button");
+                deleteButton.textContent = "Delete";
+                deleteButton.addEventListener("click", function () {
+                    deleteJob(selectedDate, newRow);
+                });
+                deleteButtonCell.appendChild(deleteButton);
+
+                hideJobForm();
+
+                // Save data to localStorage
+                saveDataToLocalStorage();
+            } else {
+                alert("Please select a date before adding a job.");
+            }
+        }
+
+        function calculateTotalHours(startTime, endTime) {
+            const [startHour, startMinute] = startTime.split(":").map(Number);
+            const [endHour, endMinute] = endTime.split(":").map(Number);
+
+            const start = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), startHour, startMinute);
+            const end = new Date(selectedDate.getFullYear(), selectedDate.getMonth(), selectedDate.getDate(), endHour, endMinute);
+
+            return (end - start) / (1000 * 60 * 60);
+        }
+
+        function deleteJob(entryDate, rowElement) {
+            // Remove the row from the table
+            rowElement.parentNode.removeChild(rowElement);
+
+            // Remove the entry from localStorage
+            const savedDataString = localStorage.getItem("jobCalendarData");
+            if (savedDataString) {
+                const savedData = JSON.parse(savedDataString);
+                const currentMonthKey = `${currentYear}-${currentMonth}`;
+
+                // Filter out the deleted entry
+                savedData[currentMonthKey] = savedData[currentMonthKey].filter((rowData) => {
+                    const currentDate = new Date(rowData.date);
+                    return !(currentDate.getTime() === entryDate.getTime());
+                });
+
+                // Update local storage
+                localStorage.setItem("jobCalendarData", JSON.stringify(savedData));
+            }
+
+            // Recalculate and display total hours after deletion
+            loadJobData();
+        }
+
+        function prevMonth() {
+            currentMonth--;
+            if (currentMonth < 0) {
+                currentMonth = 11;
+                currentYear--;
+            }
+            renderCalendar();
+            hideJobForm();
+            loadJobData();
+        }
+
+        function nextMonth() {
+            currentMonth++;
+            if (currentMonth > 11) {
+                currentMonth = 0;
+                currentYear++;
+            }
+            renderCalendar();
+            hideJobForm();
+            loadJobData();
+        }
+
+        function getMonthName(month) {
+            const months = [
+                "Siječanj", "Veljača", "Ožujak", "Travanj", "Svibanj", "Lipanj",
+                "Srpanj", "Kolovoz", "Rujan", "Listopad", "Studeni", "Prosinac"
+            ];
+            return months[month];
+        }
+
+        function formatDate(date) {
+            const options = { year: 'numeric', month: 'numeric', day: 'numeric' };
+            return date.toLocaleDateString(undefined, options);
+        }
+
+        function saveDataToLocalStorage() {
+            const savedDataString = localStorage.getItem("jobCalendarData");
+            const savedData = savedDataString ? JSON.parse(savedDataString) : {};
+
+            const currentMonthKey = `${currentYear}-${currentMonth}`;
+            savedData[currentMonthKey] = [];
+
+            const jobTableBody = document.getElementById("jobTableBody");
+            for (let i = 0; jobTableBody.rows && i < jobTableBody.rows.length; i++) {
+                const row = jobTableBody.rows[i];
+                const rowData = {
+                    date: row.cells[0].textContent,
+                    startTime: row.cells[1].textContent,
+                    endTime: row.cells[2].textContent,
+                    totalHours: row.cells[3].textContent,
+                    location: row.cells[4].textContent,
+                    userNotes: row.cells[5].textContent // Save user notes
+                };
+                savedData[currentMonthKey].push(rowData);
+            }
+
+            localStorage.setItem("jobCalendarData", JSON.stringify(savedData));
+
+            // Recalculate and display total hours after saving
+            loadJobData();
+        }
+
+        function loadSavedData() {
+            const savedDataString = localStorage.getItem("jobCalendarData");
+            if (savedDataString) {
+                const savedData = JSON.parse(savedDataString);
+
+                const jobTableBody = document.getElementById("jobTableBody");
+                jobTableBody.innerHTML = ""; // Clear existing data
+
+                for (const monthKey in savedData) {
+                    if (monthKey !== "currentMonth" && monthKey !== "currentYear" && monthKey === `${currentYear}-${currentMonth}`) {
+                        const [year, month] = monthKey.split("-").map(Number);
+                        if (!isNaN(year) && !isNaN(month)) {
+                            for (const rowData of savedData[monthKey]) {
+                                const newRow = jobTableBody.insertRow();
+                                newRow.insertCell().textContent = rowData.date;
+                                newRow.insertCell().textContent = rowData.startTime;
+                                newRow.insertCell().textContent = rowData.endTime;
+                                newRow.insertCell().textContent = rowData.totalHours;
+                                newRow.insertCell().textContent = rowData.location;
+                                newRow.insertCell().textContent = rowData.userNotes; // Display user notes
+
+                                // Add delete button
+                                const deleteButtonCell = newRow.insertCell();
+                                const deleteButton = document.createElement("button");
+                                deleteButton.textContent = "Delete";
+                                deleteButton.addEventListener("click", function () {
+                                    const entryDate = new Date(rowData.date);
+                                    deleteJob(entryDate, newRow);
+                                });
+                                deleteButtonCell.appendChild(deleteButton);
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Recalculate and display total hours after loading saved data
+            loadJobData();
+        }
+
+        function loadJobData() {
+            const jobTableBody = document.getElementById("jobTableBody");
+            const totalHoursCell = document.getElementById("totalHoursCell");
+
+            jobTableBody.innerHTML = ""; // Clear existing data
+            totalHoursCell.textContent = "Ukupno sati: 0.00"; // Reset total hours
+
+            const savedDataString = localStorage.getItem("jobCalendarData");
+            if (savedDataString) {
+                const savedData = JSON.parse(savedDataString);
+
+                // Check if data for the current month exists
+                const currentMonthKey = `${currentYear}-${currentMonth}`;
+                if (savedData[currentMonthKey]) {
+                    let totalHours = 0;
+
+                    for (const rowData of savedData[currentMonthKey]) {
+                        const entryDate = new Date(rowData.date);
+
+                        // Check if the entry is for the current month and year
+                        if (entryDate.getMonth() === currentMonth && entryDate.getFullYear() === currentYear) {
+                            const newRow = jobTableBody.insertRow();
+                            newRow.insertCell().textContent = rowData.date;
+                            newRow.insertCell().textContent = rowData.startTime;
+                            newRow.insertCell().textContent = rowData.endTime;
+                            newRow.insertCell().textContent = rowData.totalHours;
+                            newRow.insertCell().textContent = rowData.location;
+                            newRow.insertCell().textContent = rowData.userNotes; // Display user notes
+
+                            // Add delete button
+                            const deleteButtonCell = newRow.insertCell();
+                            const deleteButton = document.createElement("button");
+                            deleteButton.textContent = "Delete";
+                            deleteButton.addEventListener("click", function () {
+                                const entryDate = new Date(rowData.date);
+                                deleteJob(entryDate, newRow);
+                            });
+                            deleteButtonCell.appendChild(deleteButton);
+
+                            // Update total hours
+                            totalHours += parseFloat(rowData.totalHours);
+                        }
+                    }
+
+                    // Display total hours in the footer row
+                    totalHoursCell.textContent = `Ukupno sati: ${totalHours.toFixed(2)}`;
+                }
+            }
+        }
+
+        // Initial rendering
+        renderCalendar();
+    </script>
+</body>
+
+</html>
