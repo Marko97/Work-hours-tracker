@@ -40,10 +40,14 @@
             margin-top: 20px;
         }
 
+        #jobTableContainer {
+            overflow-x: auto;
+            margin-top: 20px;
+        }
+
         #jobTable {
             width: 100%;
             border-collapse: collapse;
-            margin-top: 20px;
         }
 
         #jobTable th,
@@ -57,6 +61,47 @@
             width: 100%;
             height: 100px;
             resize: vertical;
+        }
+
+        /* Responsive CSS using media queries */
+        @media (max-width: 600px) {
+
+            th,
+            td {
+                font-size: 12px;
+            }
+
+            button {
+                font-size: 12px;
+            }
+
+            #jobForm {
+                margin-top: 10px;
+            }
+
+            textarea {
+                height: 80px;
+            }
+        }
+
+        @media (max-width: 400px) {
+
+            th,
+            td {
+                font-size: 10px;
+            }
+
+            button {
+                font-size: 10px;
+            }
+
+            #jobForm {
+                margin-top: 5px;
+            }
+
+            textarea {
+                height: 60px;
+            }
         }
     </style>
 </head>
@@ -100,29 +145,31 @@
         <button onclick="addJob()">Add Job</button>
     </div>
 
-    <table id="jobTable">
-        <thead>
-            <tr>
-                <th>Datum</th>
-                <th>Početak</th>
-                <th>Završetak</th>
-                <th>Ukupno</th>
-                <th>Lokacija</th>
-                <th>Napomena</th>
-                <th>Uređivanje</th>
-            </tr>
-        </thead>
-        <tbody id="jobTableBody"></tbody>
-        <!-- New row for total hours -->
-        <tfoot>
-            <tr>
-                <td colspan="3"></td>
-                <td id="totalHoursCell">Ukupno sati: 0.00</td>
-                <td colspan="2"></td>
-                <td></td>
-            </tr>
-        </tfoot>
-    </table>
+    <div id="jobTableContainer">
+        <table id="jobTable">
+            <thead>
+                <tr>
+                    <th>Datum</th>
+                    <th>Početak</th>
+                    <th>Završetak</th>
+                    <th>Ukupno</th>
+                    <th>Lokacija</th>
+                    <th>Napomena</th>
+                    <th>Uređivanje</th>
+                </tr>
+            </thead>
+            <tbody id="jobTableBody"></tbody>
+            <!-- New row for total hours -->
+            <tfoot>
+                <tr>
+                    <td colspan="3"></td>
+                    <td id="totalHoursCell">Ukupno sati: 0.00</td>
+                    <td colspan="2"></td>
+                    <td></td>
+                </tr>
+            </tfoot>
+        </table>
+    </div>
 
     <!-- Export to Excel button and scripts -->
     <button onclick="exportToExcel()">Izvoz u Excel</button>
@@ -135,9 +182,12 @@
             const workbook = XLSX.utils.book_new();
 
             // Create a copy of the table without the "Action" column
-            const filteredTableBody = jobTableBody.cloneNode(true);
-            for (let i = 0; i < filteredTableBody.rows.length; i++) {
-                filteredTableBody.rows[i].deleteCell(-1); // Remove the last cell ("Action" column)
+            const filteredTableBody = document.createElement('tbody');
+            for (let i = 0; i < jobTableBody.rows.length; i++) {
+                const newRow = filteredTableBody.insertRow();
+                for (let j = 0; j < jobTableBody.rows[i].cells.length - 1; j++) {
+                    newRow.insertCell().textContent = jobTableBody.rows[i].cells[j].textContent;
+                }
             }
 
             const worksheet = XLSX.utils.table_to_sheet(filteredTableBody);
@@ -149,8 +199,7 @@
                 { wch: 15 },  // End Time
                 { wch: 15 },  // Total Hours
                 { wch: 20 },  // Location
-                { wch: 40 },  // User Notes
-                { wch: 15 }   // Action
+                { wch: 40 }   // User Notes
             ];
 
             worksheet['!cols'] = columnWidths;
@@ -165,6 +214,12 @@
             // Add the column names row to the worksheet at the beginning
             const data = [filteredColumnNames];
             XLSX.utils.sheet_add_aoa(worksheet, data, { origin: "A1" });
+
+            // Add the row data to the worksheet starting from A2
+            const rowData = Array.from(filteredTableBody.rows).map(row =>
+                Array.from(row.cells).slice(0, -1).map(cell => cell.textContent)
+            );
+            XLSX.utils.sheet_add_aoa(worksheet, rowData, { origin: "A2" });
 
             // Add the total hours row to the worksheet
             const totalHoursRow = [null, null, null, totalHoursCell.textContent, null, null];
