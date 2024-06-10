@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Work Hours Tracker</title>
+    <link rel="stylesheet" href="styles.css" />
+  </head>
+
+  <body>
+    <h1>Work Hours Tracker</h1>
+    <div>
+      <button onclick="prevMonth()">Prošli mjesec</button>
+      <button onclick="nextMonth()">Sljedeći mjesec</button>
+    </div>
+    <table id="calendarTable">
+      <thead>
+        <tr>
+          <th colspan="7" id="monthYearHeader"></th>
+        </tr>
+        <tr>
+          <th>Nedjelja</th>
+          <th>Ponedjeljak</th>
+          <th>Utorak</th>
+          <th>Srijeda</th>
+          <th>Četvrtak</th>
+          <th>Petak</th>
+          <th>Subota</th>
+        </tr>
+      </thead>
+      <tbody id="calendarBody"></tbody>
+    </table>
+
+    <div id="jobForm">
+      <h2>Unesi podatke o poslu za određeni dan</h2>
+      <label for="startTime">Početak radnog vremena (HH:mm):</label>
+      <input type="time" id="startTime" required />
+
+      <label for="endTime">Završetak radnog vremena (HH:mm):</label>
+      <input type="time" id="endTime" required />
+
+      <label for="location">Lokacija:</label>
+      <input type="text" id="location" required />
+
+      <label for="userNotes">Napomene:</label>
+      <textarea id="userNotes"></textarea>
+
+      <button onclick="addJob()">Dodaj podatke u tablicu</button>
+    </div>
+
+    <div id="jobTableContainer">
+      <table id="jobTable">
+        <thead>
+          <tr>
+            <th>Datum</th>
+            <th>Početak</th>
+            <th>Završetak</th>
+            <th>Ukupno</th>
+            <th>Lokacija</th>
+            <th>Napomena</th>
+            <th>Uređivanje</th>
+          </tr>
+        </thead>
+        <tbody id="jobTableBody"></tbody>
+        <tfoot>
+          <tr>
+            <td colspan="3"></td>
+            <td id="totalHoursCell">Ukupno sati: 0.00</td>
+            <td colspan="2"></td>
+            <td></td>
+          </tr>
+        </tfoot>
+      </table>
+    </div>
+
+    <button onclick="exportToExcel()">Izvoz u Excel</button>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.17.5/xlsx.full.min.js"></script>
+    <script src="script.js"></script>
+  </body>
+</html>
